@@ -1,4 +1,4 @@
-# polymarket-wallets
+# polymarket-wallet-explorer
 
 A Polymarket trader analytics app powered entirely by the [Surf API](https://docs.asksurf.ai/llms.txt). Browse markets, rank traders by realized PnL, drill into individual wallet positions, and surface smart-money signals — all from one API key.
 
@@ -23,8 +23,8 @@ The whole integration lives in one file — [`src/lib/surfClient.ts`](src/lib/su
 ## Quickstart
 
 ```bash
-git clone https://github.com/<your-account>/polymarket-wallets
-cd polymarket-wallets
+git clone https://github.com/JamesDaizs/polymarket-wallet-explorer
+cd polymarket-wallet-explorer
 cp .env.example .env.local
 # Open .env.local and paste your SURF_API_KEY (get one at https://agents.asksurf.ai)
 pnpm install
