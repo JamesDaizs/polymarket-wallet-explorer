@@ -1,26 +1,18 @@
 import { SurfClient, type SmartMoneyTradeEntry } from "@/lib/surfClient";
 import type { Signal } from "../types";
+import { classifyWhaleTier } from "@/lib/whale";
 
 const client = new SurfClient();
-
-function classifyWhaleTier(amount_usd: number): string {
-  if (amount_usd >= 100_000) return "whale";
-  if (amount_usd >= 10_000) return "large";
-  if (amount_usd >= 1_000) return "medium";
-  return "small";
-}
 
 export async function getSignals(
   days = 7,
   limit = 100,
   offset = 0
 ): Promise<Signal[]> {
-  // days is intentionally not honored — SmartMoneyParams has no time-window field;
-  // the public smart-money endpoint returns recent/rolling data only.
-  void days;
+  const from = days > 0 ? Math.floor(Date.now() / 1000) - days * 86_400 : undefined;
 
   const [smartMoneyRes, leaderboardRes] = await Promise.all([
-    client.getSmartMoney({ view: "trades", limit, offset }),
+    client.getSmartMoney({ view: "trades", limit, offset, from }),
     client
       .getLeaderboard({ sort: "pnl", limit: 1000 })
       .catch(() => ({

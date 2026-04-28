@@ -1,14 +1,8 @@
 import { SurfClient } from "@/lib/surfClient";
 import type { WalletProfile, WalletTrade } from "../types";
+import { classifyWhaleTier } from "@/lib/whale";
 
 const client = new SurfClient();
-
-function classifyWhaleTier(amount_usd: number): string {
-  if (amount_usd >= 100_000) return "whale";
-  if (amount_usd >= 10_000) return "large";
-  if (amount_usd >= 1_000) return "medium";
-  return "small";
-}
 
 export async function getWalletProfile(
   address: string

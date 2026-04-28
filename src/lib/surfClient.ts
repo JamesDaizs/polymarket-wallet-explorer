@@ -35,6 +35,8 @@ export interface LeaderboardParams {
 export interface SmartMoneyParams {
   view?: "positioning" | "trades";
   market?: string;
+  from?: number;       // Unix seconds (inclusive lower bound)
+  to?: number;         // Unix seconds (inclusive upper bound)
   limit?: number;
   offset?: number;
 }
