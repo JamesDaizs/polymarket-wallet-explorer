@@ -1,108 +1,83 @@
-import { queryClickHouse, escapeString } from "../clickhouse";
+import { SurfClient } from "@/lib/surfClient";
 import type { WalletProfile, WalletTrade } from "../types";
+import { classifyWhaleTier } from "@/lib/whale";
 
-interface ProfileRow {
-  address: string;
-  total_pnl: string;
-  total_usd_volume: string;
-  total_trades: string;
-  positions_count: string;
-  win_rate: string;
-  roi: string;
-  avg_trade_size_usd: string;
-  last_trade_date: string;
-}
-
-interface TradeRow {
-  block_time: string;
-  question: string;
-  outcome_label: string;
-  price: string;
-  amount_usd: string;
-  shares: string;
-  whale_tier: string;
-  condition_id: string;
-  category: string;
-  event_slug: string;
-}
+const client = new SurfClient();
 
 export async function getWalletProfile(
   address: string
 ): Promise<WalletProfile | null> {
-  const safe = escapeString(address).toLowerCase();
-  const sql = `
-    SELECT
-      address,
-      total_pnl,
-      total_usd_volume,
-      total_trades,
-      positions_count,
-      coalesce(win_rate, 0) AS win_rate,
-      if(total_usd_volume > 0, total_pnl / total_usd_volume, 0) AS roi,
-      coalesce(avg_trade_size_usd, 0) AS avg_trade_size_usd,
-      toString(last_trade_date) AS last_trade_date
-    FROM polymarket_polygon.wallet_profiles
-    WHERE lower(address) = '${safe}'
-    LIMIT 1
-  `;
+  const [positionsRes, tradesRes, leaderboardRes] = await Promise.all([
+    client.getPositions({ address, limit: 500 }),
+    client.getTrades({ address, limit: 1000, sort: "newest" }),
+    client
+      .getLeaderboard({ sort: "pnl", limit: 1000 })
+      .catch(() => ({
+        data: [] as Array<{
+          address: string;
+          positions: number;
+          positions_won: number;
+        }>,
+      })),
+  ]);
 
-  const rows = await queryClickHouse<ProfileRow>(sql);
-  if (rows.length === 0) return null;
-  return parseProfileRow(rows[0]);
+  if (positionsRes.data.length === 0 && tradesRes.data.length === 0) {
+    return null;
+  }
+
+  const total_pnl = positionsRes.data.reduce(
+    (s, p) => s + (p.realized_pnl ?? 0),
+    0
+  );
+  const total_usd_volume = tradesRes.data.reduce(
+    (s, t) => s + (t.amount_usd ?? 0),
+    0
+  );
+  const total_trades = tradesRes.data.length;
+  const positions_count = positionsRes.data.length;
+
+  const lbEntry = leaderboardRes.data.find(
+    (e) => e.address.toLowerCase() === address.toLowerCase()
+  );
+  const win_rate =
+    lbEntry && lbEntry.positions > 0
+      ? lbEntry.positions_won / lbEntry.positions
+      : 0;
+
+  const roi = total_usd_volume > 0 ? total_pnl / total_usd_volume : 0;
+  const avg_trade_size_usd =
+    total_trades > 0 ? total_usd_volume / total_trades : 0;
+  const last_trade_date =
+    tradesRes.data.length > 0 ? tradesRes.data[0].block_time : "";
+
+  return {
+    address,
+    total_pnl,
+    total_usd_volume,
+    total_trades,
+    positions_count,
+    win_rate,
+    roi,
+    avg_trade_size_usd,
+    last_trade_date,
+  };
 }
 
 export async function getRecentTrades(
   address: string,
   limit = 20
 ): Promise<WalletTrade[]> {
-  const safe = escapeString(address).toLowerCase();
-  const sql = `
-    SELECT
-      toString(block_time) AS block_time,
-      question,
-      outcome_label,
-      price,
-      amount_usd,
-      shares,
-      whale_tier,
-      condition_id,
-      coalesce(category, '') AS category,
-      coalesce(event_slug, '') AS event_slug
-    FROM polymarket_polygon.whale_trades_enriched
-    WHERE lower(taker_address) = '${safe}'
-    ORDER BY block_time DESC
-    LIMIT ${limit}
-  `;
-
-  const rows = await queryClickHouse<TradeRow>(sql);
-  return rows.map(parseTradeRow);
-}
-
-function parseProfileRow(r: ProfileRow): WalletProfile {
-  return {
-    address: r.address,
-    total_pnl: parseFloat(r.total_pnl) || 0,
-    total_usd_volume: parseFloat(r.total_usd_volume) || 0,
-    total_trades: parseInt(r.total_trades) || 0,
-    positions_count: parseInt(r.positions_count) || 0,
-    win_rate: parseFloat(r.win_rate) || 0,
-    roi: parseFloat(r.roi) || 0,
-    avg_trade_size_usd: parseFloat(r.avg_trade_size_usd) || 0,
-    last_trade_date: r.last_trade_date,
-  };
-}
-
-function parseTradeRow(r: TradeRow): WalletTrade {
-  return {
-    block_time: r.block_time,
-    question: r.question || "Unknown Market",
-    outcome_label: r.outcome_label || "",
-    price: parseFloat(r.price) || 0,
-    amount_usd: parseFloat(r.amount_usd) || 0,
-    shares: parseFloat(r.shares) || 0,
-    whale_tier: r.whale_tier || "",
-    condition_id: r.condition_id || "",
-    category: r.category,
-    event_slug: r.event_slug,
-  };
+  const { data } = await client.getTrades({ address, limit, sort: "newest" });
+  return data.map((t) => ({
+    block_time: t.block_time,
+    question: t.question ?? "",
+    outcome_label: t.outcome_label,
+    price: t.price,
+    amount_usd: t.amount_usd,
+    shares: t.shares,
+    whale_tier: classifyWhaleTier(t.amount_usd),
+    condition_id: t.condition_id,
+    category: "",
+    event_slug: "",
+  }));
 }

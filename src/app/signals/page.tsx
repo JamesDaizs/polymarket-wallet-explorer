@@ -1,8 +1,7 @@
 import { getSignals } from "@/lib/queries/signals";
 import { SignalsClient } from "./signals-client";
 
-export const dynamic = "force-static";
-export const revalidate = 300;
+export const dynamic = "force-dynamic";
 
 export default async function SignalsPage() {
   const signals = await getSignals(7, 50);

@@ -1,22 +1,22 @@
-import { queryClickHouse } from "../clickhouse";
+import { SurfClient } from "../surfClient";
 import type { Market } from "../types";
 
-interface MarketRow {
-  condition_id: string;
-  question: string;
-  category: string;
-  image: string;
-  icon: string;
-  event_slug: string;
-  market_slug: string;
-  market_end_date: string;
-  volume_total: string;
-  volume_1wk: string;
-  polymarket_link: string;
-  tags: string;
-  yes_price: string;
-  no_price: string;
-  last_trade_time: string;
+const client = new SurfClient();
+
+const KNOWN_CATEGORIES = [
+  "All",
+  "Politics",
+  "Sports",
+  "Crypto",
+  "Economy",
+  "Pop Culture",
+  "Science",
+  "Tech",
+  "Climate",
+];
+
+export async function getCategories(): Promise<string[]> {
+  return KNOWN_CATEGORIES;
 }
 
 export async function getActiveMarkets(
@@ -24,70 +24,48 @@ export async function getActiveMarkets(
   limit = 100,
   offset = 0
 ): Promise<Market[]> {
-  const categoryFilter = category && category !== "All"
-    ? `AND (md.tags ILIKE '%${category}%' OR md.category ILIKE '%${category}%')`
-    : "";
+  const { data: markets } = await client.getMarkets({ limit, offset });
 
-  const sql = `
-    SELECT
-      md.condition_id,
-      md.question,
-      coalesce(md.category, '') AS category,
-      coalesce(md.image, '') AS image,
-      coalesce(md.icon, '') AS icon,
-      coalesce(md.event_slug, '') AS event_slug,
-      coalesce(md.market_slug, '') AS market_slug,
-      coalesce(toString(md.market_end_date), '') AS market_end_date,
-      coalesce(md.volume_total, 0) AS volume_total,
-      coalesce(md.volume_1wk, 0) AS volume_1wk,
-      coalesce(md.polymarket_link, '') AS polymarket_link,
-      coalesce(md.tags, '[]') AS tags,
-      maxIf(p.last_price, p.outcome_label = 'Yes') AS yes_price,
-      maxIf(p.last_price, p.outcome_label = 'No') AS no_price,
-      max(p.last_trade_time) AS last_trade_time
-    FROM polymarket_polygon.market_details md
-    JOIN polymarket_realtime.prices_latest_store p
-      ON md.condition_id = p.condition_id
-    WHERE md.active = 1 AND md.closed = 0
-      ${categoryFilter}
-    GROUP BY md.condition_id, md.question, md.category, md.image, md.icon,
-      md.event_slug, md.market_slug, md.market_end_date, md.volume_total,
-      md.volume_1wk, md.polymarket_link, md.tags
-    ORDER BY md.volume_1wk DESC
-    LIMIT ${limit} OFFSET ${offset}
-  `;
+  // Parallel fetch latest prices per market
+  const priceResults = await Promise.all(
+    markets.map((m) =>
+      client
+        .getPrices({ condition_id: m.condition_id, interval: "latest" })
+        .catch(() => ({ data: [] as Array<{ outcome_label: string; price: number }> }))
+    )
+  );
 
-  const rows = await queryClickHouse<MarketRow>(sql);
-  return rows.map(parseMarketRow);
-}
+  const out: Market[] = markets.map((m, i) => {
+    const prices = priceResults[i].data;
+    const yes = prices.find((p) => p.outcome_label === "Yes")?.price ?? 0;
+    const no = prices.find((p) => p.outcome_label === "No")?.price ?? 0;
+    return {
+      condition_id: m.condition_id,
+      question: m.title ?? "",
+      category: m.category ?? "",
+      image: m.image ?? "",
+      icon: m.image ?? "",
+      event_slug: m.event_slug ?? "",
+      market_slug: m.market_slug,
+      market_end_date: m.end_time ? String(m.end_time) : "",
+      volume_total: m.volume_total ?? 0,
+      volume_1wk: m.volume_1_week ?? 0,
+      polymarket_link: m.polymarket_link ?? (m.market_slug
+        ? `https://polymarket.com/event/${m.market_slug}`
+        : ""),
+      tags: JSON.stringify(m.tags ?? []),
+      yes_price: yes,
+      no_price: no,
+      last_trade_time: "",
+    };
+  });
 
-export async function getCategories(): Promise<string[]> {
-  const sql = `
-    SELECT DISTINCT category
-    FROM polymarket_polygon.market_details
-    WHERE active = 1 AND closed = 0 AND category != ''
-    ORDER BY category
-  `;
-  const rows = await queryClickHouse<{ category: string }>(sql);
-  return ["All", ...rows.map((r) => r.category)];
-}
-
-function parseMarketRow(r: MarketRow): Market {
-  return {
-    condition_id: r.condition_id,
-    question: r.question,
-    category: r.category,
-    image: r.image,
-    icon: r.icon,
-    event_slug: r.event_slug,
-    market_slug: r.market_slug,
-    market_end_date: r.market_end_date,
-    volume_total: parseFloat(String(r.volume_total)) || 0,
-    volume_1wk: parseFloat(String(r.volume_1wk)) || 0,
-    polymarket_link: r.polymarket_link,
-    tags: r.tags,
-    yes_price: parseFloat(String(r.yes_price)) || 0,
-    no_price: parseFloat(String(r.no_price)) || 0,
-    last_trade_time: r.last_trade_time,
-  };
+  if (category && category !== "All") {
+    return out.filter(
+      (m) =>
+        m.category.toLowerCase() === category.toLowerCase() ||
+        m.tags.toLowerCase().includes(category.toLowerCase())
+    );
+  }
+  return out;
 }

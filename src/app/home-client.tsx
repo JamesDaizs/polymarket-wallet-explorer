@@ -27,8 +27,8 @@ export function HomeClient({ initialMarkets, categories }: HomeClientProps) {
       if (cat !== "All") params.set("category", cat);
       const res = await fetch(`/api/markets?${params}`);
       const data = await res.json();
-      setMarkets(data);
-      setHasMore(data.length >= 60);
+      setMarkets(data.data);
+      setHasMore(data.data.length >= 60);
     } catch (err) {
       console.error("Failed to fetch markets:", err);
     } finally {
@@ -46,9 +46,9 @@ export function HomeClient({ initialMarkets, categories }: HomeClientProps) {
       if (category !== "All") params.set("category", category);
       const res = await fetch(`/api/markets?${params}`);
       const data = await res.json();
-      setMarkets((prev) => [...prev, ...data]);
+      setMarkets((prev) => [...prev, ...data.data]);
       setOffset((prev) => prev + 60);
-      setHasMore(data.length >= 60);
+      setHasMore(data.data.length >= 60);
     } catch (err) {
       console.error("Failed to load more:", err);
     } finally {

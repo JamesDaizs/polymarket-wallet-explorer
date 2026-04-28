@@ -21,7 +21,7 @@ const columns = [
   { key: "total_usd_volume", label: "Buy Volume", sortable: true },
   { key: "avg_trade", label: "Avg Trade", sortable: true },
   { key: "total_trades", label: "Trades", sortable: true },
-  { key: "last_active", label: "Last Active", sortable: true },
+  { key: "last_active", label: "Last Active", sortable: false },
   { key: "markets_traded", label: "Markets", sortable: true },
 ];
 

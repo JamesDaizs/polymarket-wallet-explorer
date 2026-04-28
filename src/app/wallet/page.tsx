@@ -58,7 +58,7 @@ export default function WalletInputPage() {
         </form>
 
         <p className="text-center text-xs text-fg-faint">
-          Polymarket wallet addresses only. Data from ClickHouse.
+          Polymarket wallet addresses only. Powered by Surf API.
         </p>
       </div>
     </div>

@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-// Dynamic import based on environment
-const USE_SURF_API = process.env.SURF_API_KEY && process.env.USE_SURF_API === "true";
+import { getActiveMarkets } from "@/lib/queries/markets";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
@@ -10,33 +8,22 @@ export async function GET(req: NextRequest) {
   const offset = parseInt(searchParams.get("offset") || "0");
 
   try {
-    let markets;
+    const markets = await getActiveMarkets(category, limit, offset);
 
-    if (USE_SURF_API) {
-      // Use Surf CLI API
-      const { getActiveMarkets } = await import("@/lib/queries/markets-surf");
-      markets = await getActiveMarkets(category, limit, offset);
-    } else {
-      // Use legacy ClickHouse
-      const { getActiveMarkets } = await import("@/lib/queries/markets");
-      markets = await getActiveMarkets(category, limit, offset);
-    }
-
-    // Add metadata about data source
     return NextResponse.json({
       data: markets,
       meta: {
-        source: USE_SURF_API ? "surf-cli" : "clickhouse",
+        source: "surf-api",
         count: markets.length,
         limit,
         offset,
-        category: category || "all"
-      }
+        category: category || "all",
+      },
     });
   } catch (error) {
     console.error("Markets API error:", error);
     return NextResponse.json(
-      { error: "Failed to fetch markets", source: USE_SURF_API ? "surf-cli" : "clickhouse" },
+      { error: "Failed to fetch markets", source: "surf-api" },
       { status: 500 }
     );
   }
