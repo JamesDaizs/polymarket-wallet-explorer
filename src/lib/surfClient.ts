@@ -39,6 +39,27 @@ export interface SmartMoneyParams {
   offset?: number;
 }
 
+export interface SmartMoneyTradeEntry {
+  taker_address?: string;
+  address?: string;
+  block_time: string;
+  amount_usd: number;
+  shares: number;
+  price: number;
+  outcome_label: string;
+  condition_id: string;
+  question?: string;
+  market_slug?: string;
+  event_slug?: string;
+  category?: string;
+  wallet_age_days?: number;
+}
+
+export interface SmartMoneyResponse {
+  data: SmartMoneyTradeEntry[];
+  meta: SurfMeta;
+}
+
 export interface PositionEntry {
   avg_price: number;
   cash_pnl: number;
@@ -97,11 +118,11 @@ export interface MarketsParams {
 
 export interface MarketEntry {
   condition_id: string;
-  market_slug: string;
-  question: string;
+  market_slug?: string;
+  question?: string;
   description?: string;
-  outcomes: string[];
-  status: string;
+  outcomes?: string[];
+  status?: string;
   end_date?: string;
   volume?: number;
   volume_24h?: number;
@@ -191,8 +212,8 @@ export class SurfClient {
     );
   }
 
-  async getSmartMoney(params: SmartMoneyParams = {}): Promise<{ data: unknown[]; meta: SurfMeta }> {
-    return this.request("/prediction-market/polymarket/smart-money", params);
+  async getSmartMoney(params: SmartMoneyParams = {}): Promise<SmartMoneyResponse> {
+    return this.request<SmartMoneyResponse>("/prediction-market/polymarket/smart-money", params);
   }
 
   async getPositions(params: { address: string; limit?: number; offset?: number }): Promise<PositionsResponse> {
@@ -215,6 +236,8 @@ export class SurfClient {
     return this.request<RankingResponse>("/prediction-market/polymarket/ranking", params);
   }
 
+  // getWalletLabels is the one method that joins addresses as a comma-separated
+  // query param, so it doesn't fit request<T>'s key/value model — kept inline for clarity.
   async getWalletLabels(params: WalletLabelsParams): Promise<WalletLabelsResponse> {
     const url = new URL(this.baseUrl + "/wallet/labels/batch");
     url.searchParams.set("addresses", params.addresses.join(","));
@@ -239,7 +262,7 @@ export class SurfClient {
 
   private async request<T>(
     path: string,
-    params: Record<string, unknown> = {}
+    params: object = {}
   ): Promise<T> {
     const url = new URL(this.baseUrl + path);
     for (const [k, v] of Object.entries(params)) {
