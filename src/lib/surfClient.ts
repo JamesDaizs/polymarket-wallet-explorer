@@ -32,6 +32,143 @@ export interface LeaderboardParams {
   offset?: number;
 }
 
+export interface SmartMoneyParams {
+  view?: "positioning" | "trades";
+  market?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface PositionEntry {
+  avg_price: number;
+  cash_pnl: number;
+  condition_id: string;
+  cur_price: number;
+  current_value: number;
+  outcome_label: string;
+  question: string;
+  realized_pnl: number;
+  redeemable: boolean;
+  size: number;
+}
+
+export interface PositionsResponse {
+  data: PositionEntry[];
+  meta: SurfMeta;
+}
+
+export interface TradesParams {
+  address?: string;
+  condition_id?: string;
+  outcome?: "Yes" | "No";
+  type?: "trade" | "redemption" | "all";
+  min_amount?: number;
+  sort?: "newest" | "oldest" | "largest";
+  limit?: number;
+  offset?: number;
+  start_time?: string;
+  end_time?: string;
+}
+
+export interface TradeEntry {
+  address: string;
+  amount_usd: number;
+  block_time: string;
+  condition_id: string;
+  outcome_label: string;
+  price: number;
+  shares: number;
+  type: string;
+  question?: string;
+}
+
+export interface TradesResponse {
+  data: TradeEntry[];
+  meta: SurfMeta;
+}
+
+export interface MarketsParams {
+  market_slug?: string;
+  event_slug?: string;
+  status?: "open" | "closed" | "resolved";
+  limit?: number;
+  offset?: number;
+}
+
+export interface MarketEntry {
+  condition_id: string;
+  market_slug: string;
+  question: string;
+  description?: string;
+  outcomes: string[];
+  status: string;
+  end_date?: string;
+  volume?: number;
+  volume_24h?: number;
+  open_interest?: number;
+}
+
+export interface MarketsResponse {
+  data: MarketEntry[];
+  meta: SurfMeta;
+}
+
+export interface PricesParams {
+  condition_id: string;
+  interval?: "latest" | "1h" | "1d";
+  start_time?: string;
+  end_time?: string;
+  limit?: number;
+}
+
+export interface PriceEntry {
+  condition_id: string;
+  outcome_label: string;
+  price: number;
+  timestamp: string;
+}
+
+export interface PricesResponse {
+  data: PriceEntry[];
+  meta: SurfMeta;
+}
+
+export interface WalletLabelsParams {
+  addresses: string[];
+}
+
+export interface WalletLabelEntry {
+  address: string;
+  label?: string;
+  entity_type?: string;
+}
+
+export interface WalletLabelsResponse {
+  data: WalletLabelEntry[];
+  meta: SurfMeta;
+}
+
+export interface RankingParams {
+  sort?: "volume_24h" | "volume_7d" | "open_interest" | "trade_count";
+  limit?: number;
+  offset?: number;
+}
+
+export interface MarketRankingEntry {
+  condition_id: string;
+  market_slug: string;
+  question: string;
+  volume_24h?: number;
+  volume_7d?: number;
+  open_interest?: number;
+  trade_count?: number;
+}
+
+export interface RankingResponse {
+  data: MarketRankingEntry[];
+  meta: SurfMeta;
+}
+
 export class SurfClient {
   private apiKey: string;
   private baseUrl: string;
@@ -50,13 +187,59 @@ export class SurfClient {
   async getLeaderboard(params: LeaderboardParams = {}): Promise<LeaderboardResponse> {
     return this.request<LeaderboardResponse>(
       "/prediction-market/polymarket/leaderboard",
-      params as Record<string, string | number>
+      params
     );
+  }
+
+  async getSmartMoney(params: SmartMoneyParams = {}): Promise<{ data: unknown[]; meta: SurfMeta }> {
+    return this.request("/prediction-market/polymarket/smart-money", params);
+  }
+
+  async getPositions(params: { address: string; limit?: number; offset?: number }): Promise<PositionsResponse> {
+    return this.request<PositionsResponse>("/prediction-market/polymarket/positions", params);
+  }
+
+  async getTrades(params: TradesParams): Promise<TradesResponse> {
+    return this.request<TradesResponse>("/prediction-market/polymarket/trades", params);
+  }
+
+  async getMarkets(params: MarketsParams = {}): Promise<MarketsResponse> {
+    return this.request<MarketsResponse>("/prediction-market/polymarket/markets", params);
+  }
+
+  async getPrices(params: PricesParams): Promise<PricesResponse> {
+    return this.request<PricesResponse>("/prediction-market/polymarket/prices", params);
+  }
+
+  async getRanking(params: RankingParams = {}): Promise<RankingResponse> {
+    return this.request<RankingResponse>("/prediction-market/polymarket/ranking", params);
+  }
+
+  async getWalletLabels(params: WalletLabelsParams): Promise<WalletLabelsResponse> {
+    const url = new URL(this.baseUrl + "/wallet/labels/batch");
+    url.searchParams.set("addresses", params.addresses.join(","));
+
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const res = await fetch(url.toString(), {
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          Accept: "application/json",
+        },
+      });
+      if (res.ok) return (await res.json()) as WalletLabelsResponse;
+      if (res.status >= 400 && res.status < 500) {
+        throw new Error(`Surf API ${res.status} on /wallet/labels/batch: ${await res.text()}`);
+      }
+      lastErr = new Error(`Surf API ${res.status} on /wallet/labels/batch`);
+      await new Promise((r) => setTimeout(r, 200 * Math.pow(2, attempt)));
+    }
+    throw lastErr ?? new Error("Surf API request failed: /wallet/labels/batch");
   }
 
   private async request<T>(
     path: string,
-    params: Record<string, string | number | undefined> = {}
+    params: Record<string, unknown> = {}
   ): Promise<T> {
     const url = new URL(this.baseUrl + path);
     for (const [k, v] of Object.entries(params)) {
