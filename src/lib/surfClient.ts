@@ -113,22 +113,42 @@ export interface TradesResponse {
 export interface MarketsParams {
   market_slug?: string;
   event_slug?: string;
-  status?: "open" | "closed" | "resolved";
+  status?: "open" | "closed";
   limit?: number;
   offset?: number;
 }
 
+export interface MarketOutcome {
+  id: string;
+  label: string;
+}
+
 export interface MarketEntry {
   condition_id: string;
-  market_slug?: string;
-  question?: string;
+  market_slug: string;
+  title: string;
+  status: string;
+  volume_total: number;
+  volume_1_week: number;
+  volume_1_month: number;
+  volume_1_year: number;
+  event_slug?: string;
+  category?: string;
+  subcategory?: string;
   description?: string;
-  outcomes?: string[];
-  status?: string;
-  end_date?: string;
-  volume?: number;
-  volume_24h?: number;
-  open_interest?: number;
+  image?: string;
+  polymarket_link?: string;
+  tags?: string[];
+  start_time?: number;
+  end_time?: number;
+  close_time?: number;
+  completed_time?: number;
+  game_start_time?: number;
+  negative_risk_id?: string;
+  resolution_source?: string;
+  winning_side?: string;
+  side_a: MarketOutcome;
+  side_b: MarketOutcome;
 }
 
 export interface MarketsResponse {

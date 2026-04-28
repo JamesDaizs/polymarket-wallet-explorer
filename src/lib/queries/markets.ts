@@ -41,19 +41,19 @@ export async function getActiveMarkets(
     const no = prices.find((p) => p.outcome_label === "No")?.price ?? 0;
     return {
       condition_id: m.condition_id,
-      question: m.question ?? "",
-      category: "",
-      image: "",
-      icon: "",
-      event_slug: "",
-      market_slug: m.market_slug ?? "",
-      market_end_date: m.end_date ?? "",
-      volume_total: m.volume ?? 0,
-      volume_1wk: m.volume_24h ?? 0,
-      polymarket_link: m.market_slug
+      question: m.title ?? "",
+      category: m.category ?? "",
+      image: m.image ?? "",
+      icon: m.image ?? "",
+      event_slug: m.event_slug ?? "",
+      market_slug: m.market_slug,
+      market_end_date: m.end_time ? String(m.end_time) : "",
+      volume_total: m.volume_total ?? 0,
+      volume_1wk: m.volume_1_week ?? 0,
+      polymarket_link: m.polymarket_link ?? (m.market_slug
         ? `https://polymarket.com/event/${m.market_slug}`
-        : "",
-      tags: "[]",
+        : ""),
+      tags: JSON.stringify(m.tags ?? []),
       yes_price: yes,
       no_price: no,
       last_trade_time: "",
@@ -63,8 +63,8 @@ export async function getActiveMarkets(
   if (category && category !== "All") {
     return out.filter(
       (m) =>
-        m.tags.toLowerCase().includes(category.toLowerCase()) ||
-        m.category.toLowerCase().includes(category.toLowerCase())
+        m.category.toLowerCase() === category.toLowerCase() ||
+        m.tags.toLowerCase().includes(category.toLowerCase())
     );
   }
   return out;
