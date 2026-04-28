@@ -1,24 +1,13 @@
-import { queryClickHouse } from "../clickhouse";
+import { SurfClient, type SmartMoneyTradeEntry } from "@/lib/surfClient";
 import type { Signal } from "../types";
 
-interface SignalRow {
-  block_time: string;
-  question: string;
-  outcome_label: string;
-  price: string;
-  amount_usd: string;
-  shares: string;
-  whale_tier: string;
-  condition_id: string;
-  market_slug: string;
-  event_slug: string;
-  category: string;
-  wallet_address: string;
-  win_rate: string;
-  total_pnl: string;
-  bets: string;
-  roi: string;
-  current_price: string;
+const client = new SurfClient();
+
+function classifyWhaleTier(amount_usd: number): string {
+  if (amount_usd >= 100_000) return "whale";
+  if (amount_usd >= 10_000) return "large";
+  if (amount_usd >= 1_000) return "medium";
+  return "small";
 }
 
 export async function getSignals(
@@ -26,59 +15,106 @@ export async function getSignals(
   limit = 100,
   offset = 0
 ): Promise<Signal[]> {
-  const sql = `
-    SELECT
-      toString(wt.block_time) AS block_time,
-      wt.question,
-      wt.outcome_label,
-      wt.price,
-      wt.amount_usd,
-      wt.shares,
-      wt.whale_tier,
-      wt.condition_id,
-      coalesce(wt.market_slug, '') AS market_slug,
-      coalesce(wt.event_slug, '') AS event_slug,
-      coalesce(wt.category, '') AS category,
-      wt.taker_address AS wallet_address,
-      wp.win_rate,
-      wp.total_pnl,
-      wp.total_trades AS bets,
-      if(wp.total_usd_volume > 0, wp.total_pnl / wp.total_usd_volume * 100, 0) AS roi,
-      coalesce(p.last_price, 0) AS current_price
-    FROM polymarket_polygon.whale_trades_enriched wt
-    JOIN polymarket_polygon.wallet_profiles wp
-      ON wt.taker_address = wp.address
-    LEFT JOIN polymarket_realtime.prices_latest_store p
-      ON wt.condition_id = p.condition_id AND wt.outcome_label = p.outcome_label
-    WHERE wt.block_date >= today() - ${days}
-      AND wp.total_pnl > 1000
-      AND wp.win_rate > 0.5
-    ORDER BY wt.block_time DESC
-    LIMIT ${limit} OFFSET ${offset}
-  `;
+  // days is intentionally not honored — SmartMoneyParams has no time-window field;
+  // the public smart-money endpoint returns recent/rolling data only.
+  void days;
 
-  const rows = await queryClickHouse<SignalRow>(sql);
-  return rows.map(parseSignalRow);
-}
+  const [smartMoneyRes, leaderboardRes] = await Promise.all([
+    client.getSmartMoney({ view: "trades", limit, offset }),
+    client
+      .getLeaderboard({ sort: "pnl", limit: 1000 })
+      .catch(() => ({
+        data: [] as Array<{
+          address: string;
+          pnl: number;
+          volume: number;
+          trade_count: number;
+          positions: number;
+          positions_won: number;
+        }>,
+        meta: { cached: false, credits_used: 0, limit: 0, offset: 0 },
+      })),
+  ]);
 
-function parseSignalRow(r: SignalRow): Signal {
-  return {
-    block_time: r.block_time,
-    question: r.question,
-    outcome_label: r.outcome_label,
-    price: parseFloat(r.price) || 0,
-    amount_usd: parseFloat(r.amount_usd) || 0,
-    shares: parseFloat(r.shares) || 0,
-    whale_tier: r.whale_tier,
-    condition_id: r.condition_id,
-    market_slug: r.market_slug,
-    event_slug: r.event_slug,
-    category: r.category,
-    wallet_address: r.wallet_address,
-    win_rate: parseFloat(r.win_rate) || 0,
-    total_pnl: parseFloat(r.total_pnl) || 0,
-    bets: parseInt(r.bets) || 0,
-    roi: parseFloat(r.roi) || 0,
-    current_price: parseFloat(r.current_price) || 0,
-  };
+  const trades = smartMoneyRes.data;
+  if (trades.length === 0) return [];
+
+  // Build leaderboard map keyed by lowercased address (Task 5 convention).
+  const lbMap = new Map<
+    string,
+    {
+      pnl: number;
+      volume: number;
+      trade_count: number;
+      positions: number;
+      positions_won: number;
+    }
+  >();
+  for (const e of leaderboardRes.data) {
+    lbMap.set(e.address.toLowerCase(), {
+      pnl: e.pnl,
+      volume: e.volume,
+      trade_count: e.trade_count,
+      positions: e.positions,
+      positions_won: e.positions_won,
+    });
+  }
+
+  // Parallel-fetch latest prices for unique condition_ids only (avoid duplicate fetches).
+  const uniqueConditionIds = Array.from(
+    new Set(trades.map((t) => t.condition_id))
+  );
+  const priceResults = await Promise.all(
+    uniqueConditionIds.map((cid) =>
+      client
+        .getPrices({ condition_id: cid, interval: "latest" })
+        .then((res) => ({ cid, prices: res.data }))
+        .catch(() => ({
+          cid,
+          prices: [] as Array<{ outcome_label: string; price: number }>,
+        }))
+    )
+  );
+
+  // Build prices map: condition_id → Yes price (0 if missing or not found).
+  const priceMap = new Map<string, number>();
+  for (const { cid, prices } of priceResults) {
+    const yes = prices.find((p) => p.outcome_label === "Yes")?.price ?? 0;
+    priceMap.set(cid, yes);
+  }
+
+  // Compose Signal rows by joining trades with leaderboard stats and prices.
+  return trades.map((t: SmartMoneyTradeEntry): Signal => {
+    const wallet_address = (t.taker_address ?? t.address ?? "").toLowerCase();
+    const stats = lbMap.get(wallet_address);
+    const win_rate =
+      stats && stats.positions > 0
+        ? stats.positions_won / stats.positions
+        : 0;
+    const total_pnl = stats?.pnl ?? 0;
+    const bets = stats?.trade_count ?? 0;
+    // roi is stored as percent (e.g. 50 for 50%), so multiply the pnl/volume fraction by 100.
+    const roi =
+      stats && stats.volume > 0 ? (stats.pnl / stats.volume) * 100 : 0;
+
+    return {
+      block_time: t.block_time,
+      question: t.question ?? "",
+      outcome_label: t.outcome_label,
+      price: t.price,
+      amount_usd: t.amount_usd,
+      shares: t.shares,
+      whale_tier: classifyWhaleTier(t.amount_usd),
+      condition_id: t.condition_id,
+      market_slug: t.market_slug ?? "",
+      event_slug: t.event_slug ?? "",
+      category: t.category ?? "",
+      wallet_address,
+      win_rate,
+      total_pnl,
+      bets,
+      roi,
+      current_price: priceMap.get(t.condition_id) ?? 0,
+    };
+  });
 }
