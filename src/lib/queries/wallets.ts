@@ -27,6 +27,7 @@ function mapLeaderboardToWallet(e: LeaderboardEntry): Wallet {
 }
 
 function applyFilters(wallets: Wallet[], f: WalletFilters): Wallet[] {
+  // f.timeWindow is intentionally not honored — the public Surf leaderboard endpoint is all-time only.
   return wallets.filter((w) => {
     if (f.volumeMin !== undefined && w.total_usd_volume < f.volumeMin) return false;
     if (f.volumeMax !== undefined && w.total_usd_volume > f.volumeMax) return false;

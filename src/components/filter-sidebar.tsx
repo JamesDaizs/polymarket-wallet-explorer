@@ -33,27 +33,7 @@ export function FilterSidebar({ filters, onApply, onClear }: FilterSidebarProps)
 
   return (
     <div className="space-y-5">
-      <div>
-        <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-fg-faint">
-          Time Window
-        </label>
-        <div className="flex gap-1">
-          {timeWindows.map((tw) => (
-            <button
-              key={tw.value}
-              onClick={() => update({ timeWindow: tw.value })}
-              className={cn(
-                "flex-1 rounded-lg py-1.5 text-xs font-medium transition-colors",
-                local.timeWindow === tw.value
-                  ? "bg-brand text-white"
-                  : "bg-bg-card text-fg-muted hover:bg-bg-elevated"
-              )}
-            >
-              {tw.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* TimeWindow control hidden — public Surf leaderboard is all-time only. */}
 
       <div>
         <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-fg-faint">
