@@ -217,14 +217,16 @@ export class SurfClient {
   private baseUrl: string;
 
   constructor(opts: { apiKey?: string; baseUrl?: string } = {}) {
-    const key = opts.apiKey ?? process.env.SURF_API_KEY;
-    if (!key) {
+    this.apiKey = opts.apiKey ?? process.env.SURF_API_KEY ?? "";
+    this.baseUrl = opts.baseUrl ?? DEFAULT_BASE_URL;
+  }
+
+  private requireKey(): void {
+    if (!this.apiKey) {
       throw new Error(
         "SURF_API_KEY is required. Get a key at https://agents.asksurf.ai and set it in .env"
       );
     }
-    this.apiKey = key;
-    this.baseUrl = opts.baseUrl ?? DEFAULT_BASE_URL;
   }
 
   async getLeaderboard(params: LeaderboardParams = {}): Promise<LeaderboardResponse> {
@@ -261,6 +263,7 @@ export class SurfClient {
   // getWalletLabels is the one method that joins addresses as a comma-separated
   // query param, so it doesn't fit request<T>'s key/value model — kept inline for clarity.
   async getWalletLabels(params: WalletLabelsParams): Promise<WalletLabelsResponse> {
+    this.requireKey();
     const url = new URL(this.baseUrl + "/wallet/labels/batch");
     url.searchParams.set("addresses", params.addresses.join(","));
 
@@ -286,6 +289,7 @@ export class SurfClient {
     path: string,
     params: object = {}
   ): Promise<T> {
+    this.requireKey();
     const url = new URL(this.baseUrl + path);
     for (const [k, v] of Object.entries(params)) {
       if (v !== undefined && v !== null) url.searchParams.set(k, String(v));

@@ -13,9 +13,10 @@ describe("SurfClient", () => {
     process.env.SURF_API_KEY = ORIG_KEY;
   });
 
-  it("throws if SURF_API_KEY is missing", () => {
+  it("throws on first request if SURF_API_KEY is missing", async () => {
     delete process.env.SURF_API_KEY;
-    expect(() => new SurfClient()).toThrow(/SURF_API_KEY/);
+    const client = new SurfClient();
+    await expect(client.getLeaderboard()).rejects.toThrow(/SURF_API_KEY/);
   });
 
   it("getLeaderboard hits the right URL with bearer auth", async () => {
