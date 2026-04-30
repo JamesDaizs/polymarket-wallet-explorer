@@ -176,6 +176,43 @@ export interface PricesResponse {
   meta: SurfMeta;
 }
 
+export interface SearchPredictionMarketParams {
+  platform?: "polymarket" | "kalshi";
+  category?: string;
+  status?: "open" | "closed" | "resolved";
+  q?: string;
+  smart_money_direction?: "BULLISH" | "BEARISH" | "NEUTRAL";
+  condition_id?: string;
+  market_ticker?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SearchPredictionMarketEntry {
+  category: string;
+  condition_id?: string;
+  days_to_resolution?: number;
+  latest_price?: number;
+  market_link?: string;
+  market_ticker?: string;
+  matched_counterpart?: string;
+  open_interest_usd: number;
+  platform: string;
+  question: string;
+  smart_money_direction?: string;
+  status: string;
+  subcategory?: string;
+  trade_count_7d: number;
+  volume_1d: number;
+  volume_30d: number;
+  volume_7d: number;
+}
+
+export interface SearchPredictionMarketResponse {
+  data: SearchPredictionMarketEntry[];
+  meta: SurfMeta;
+}
+
 export interface WalletLabelsParams {
   addresses: string[];
 }
@@ -258,6 +295,10 @@ export class SurfClient {
 
   async getRanking(params: RankingParams = {}): Promise<RankingResponse> {
     return this.request<RankingResponse>("/prediction-market/polymarket/ranking", params);
+  }
+
+  async searchPredictionMarket(params: SearchPredictionMarketParams = {}): Promise<SearchPredictionMarketResponse> {
+    return this.request<SearchPredictionMarketResponse>("/search/prediction-market", params);
   }
 
   // getWalletLabels is the one method that joins addresses as a comma-separated

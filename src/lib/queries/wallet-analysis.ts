@@ -8,10 +8,10 @@ export async function getWalletProfile(
   address: string
 ): Promise<WalletProfile | null> {
   const [positionsRes, tradesRes, leaderboardRes] = await Promise.all([
-    client.getPositions({ address, limit: 500 }),
-    client.getTrades({ address, limit: 1000, sort: "newest" }),
+    client.getPositions({ address, limit: 100 }),
+    client.getTrades({ address, limit: 100, sort: "newest" }),
     client
-      .getLeaderboard({ sort: "pnl", limit: 1000 })
+      .getLeaderboard({ sort: "pnl", limit: 100 })
       .catch(() => ({
         data: [] as Array<{
           address: string;

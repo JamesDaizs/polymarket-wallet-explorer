@@ -82,7 +82,7 @@ export async function getWallets(
   f: WalletFilters
 ): Promise<{ wallets: Wallet[]; summary: WalletSummary; total: number }> {
   const apiSort = SORT_TO_API[f.sortBy] ?? "pnl";
-  const { data } = await client.getLeaderboard({ sort: apiSort, limit: 500, offset: 0 });
+  const { data } = await client.getLeaderboard({ sort: apiSort, limit: 100, offset: 0 });
 
   const all = data.map(mapLeaderboardToWallet);
   const filtered = applyFilters(all, f);

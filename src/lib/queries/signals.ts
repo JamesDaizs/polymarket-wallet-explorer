@@ -14,7 +14,7 @@ export async function getSignals(
   const [smartMoneyRes, leaderboardRes] = await Promise.all([
     client.getSmartMoney({ view: "trades", limit, offset, from }),
     client
-      .getLeaderboard({ sort: "pnl", limit: 1000 })
+      .getLeaderboard({ sort: "pnl", limit: 100 })
       .catch(() => ({
         data: [] as Array<{
           address: string;
