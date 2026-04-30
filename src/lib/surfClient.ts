@@ -179,7 +179,7 @@ export interface PricesResponse {
 export interface SearchPredictionMarketParams {
   platform?: "polymarket" | "kalshi";
   category?: string;
-  status?: "open" | "closed" | "resolved";
+  status?: "active" | "closed" | "finalized";
   q?: string;
   smart_money_direction?: "BULLISH" | "BEARISH" | "NEUTRAL";
   condition_id?: string;

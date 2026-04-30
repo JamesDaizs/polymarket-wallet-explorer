@@ -27,13 +27,13 @@ export async function getActiveMarkets(
   const cappedLimit = Math.min(limit, 100);
   const params: {
     platform: "polymarket";
-    status: "open";
+    status: "active";
     limit: number;
     offset: number;
     category?: string;
   } = {
     platform: "polymarket",
-    status: "open",
+    status: "active",
     limit: cappedLimit,
     offset,
   };
